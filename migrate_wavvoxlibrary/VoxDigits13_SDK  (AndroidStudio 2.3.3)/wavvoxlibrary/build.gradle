@@ -1,0 +1,179 @@
+apply plugin: 'com.android.model.library'
+
+/**
+ * >>>>> Set the version code here <<<<<
+ *
+ * Each subversion code should be exactly 2 numeric digits or we will get wrong versions published
+ * in the Google Play Store
+ */
+ext.majorVersion = "03";
+ext.minorVersion = "07";
+ext.patchVersion = "090";
+
+/**
+ * The name of the app version, using the Semantic Versioning format (major.minor.patch)
+ * @return
+ */
+String appVersionName() {
+    return removeLeadingZeros(ext.majorVersion) + "." + removeLeadingZeros(ext.minorVersion) + "." + removeLeadingZeros(ext.patchVersion);
+}
+
+/**
+ * The name of the app version, using a combination of stripped and non-stripped leading zeros in
+ * the major and minor version numbers, and omitting the patch version number. We surround the text
+ * with double quotes for use as a build config field so we don't get a field type mismatch
+ * @return
+ */
+String versionNameWavvoxFormat() {
+    return  "\"" +removeLeadingZeros(ext.majorVersion) + "." + ext.minorVersion  + "\"";
+}
+
+static String removeLeadingZeros(value) {   // jm*20190405
+    return new Integer(value).toString();
+}
+
+/**
+ * The version code of the app.  This is used by the Google Play Store to decide which versions to
+ * offer to users, so we should exercise care if we change this method.  This blog has some scheme
+ * suggestions for apps with NDK libs: {#link https://androidbycode.wordpress.com/category/gradle/}
+ * @return
+ */
+String appVersionCode() {
+    return ext.majorVersion + ext.minorVersion + ext.patchVersion;
+}
+
+model {
+    android {
+        compileSdkVersion 25
+        buildToolsVersion "25.0.3"
+
+        defaultConfig {
+            minSdkVersion.apiLevel 16       /*** was: 8 ***/
+            targetSdkVersion.apiLevel 25
+            //versionCode appVersionCode()
+            versionName appVersionName()
+            setProperty("archivesBaseName", "wavvoxlibrary-$versionName")
+            buildConfigFields {
+                create() {
+                    type "String"
+                    name "VERSION_NAME_WAVVOX_FORMAT"
+                    value versionNameWavvoxFormat()
+                }
+            }
+
+            testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        }   // defaultConfig
+        buildTypes {
+            release {
+                minifyEnabled true
+                proguardFiles.add(file("proguard-rules.pro"))
+            }
+        }   // buildTypes
+        // }   // android   // jm*20190405
+
+        // android.ndk {   // jm*20190405
+        ndk {
+            moduleName "wavvox-decoder"
+            platformVersion = 16    // vs. 21 for 64bit?
+
+            // full optimization, char data type is signed
+            CFlags.addAll([
+            //        "-I${project.rootDir}/app/src/main/jni".toString(),   // jm*20190405
+                    "-Iwavvoxlibrary/src/main/jni".toString(),
+                    "-O3",
+//                "-fsigned-char"
+                    "-Wno-error=format-security",
+                    "-std=c99",    // as before; vs. -c11 ?
+//                    "-mfloat-abi=softfp",
+                    "-mfpu=neon",
+//                "-march=arm64",    // how to build 64bit?
+                    "-fvisibility=hidden",
+                    "-g"
+            ])
+
+            // Loads NDK libraries: log, android; we may need to add OpenSLES in the future (for native audio)
+            ldLibs.addAll([
+                    "log"
+                    , "android"
+//                , "OpenSLES"
+            ])
+
+            // these platforms cover 99% percent of all Android devices
+            abiFilters.addAll([
+                "armeabi-v7a"
+                , "arm64-v8a"
+//                , "x86"
+//                , "x86_64"
+            ])
+        }   // ndk
+
+        // C source files to include in the build script
+        // android.sources.main.jni {   // jm*20190405
+        sources {
+            main {
+                jni {
+                    source {
+                        include "wavvoxNativeApp.c"
+                        include "licenseWavvox.c"        // jm*20180520
+                        include "driverGeneration.c"     // jm*20170317
+                        include "driver.c"
+                        include "process.c"
+                        include "buildPacket.c"          // jm*20180315
+                        include "buildPacketEmbed.c"
+                        include "Decode.c"
+                        include "fifo.c"
+                        include "filters.c"
+                        include "campaignCodeText.c"
+                        include "convertTextCode.c"
+                        include "transmitSymbol.c"
+                        include "transmit.c"
+                        srcDir "jni"
+                    }
+                }   // jni
+            }   // main
+        }   // sources
+
+    }   // android   // jm*20190405
+}   // model
+
+//dependencies {
+//    compile fileTree(dir: 'libs', include: ['*.jar'])
+//    androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
+//        exclude group: 'com.android.support', module: 'support-annotations'
+//    })
+//    compile 'com.android.support:appcompat-v7:25.1.1'
+//    testCompile 'junit:junit:4.12'
+//}
+
+dependencies {
+    compile 'com.android.support:support-annotations:25.3.1'
+    testCompile 'junit:junit:4.12'
+    testCompile 'org.hamcrest:hamcrest-junit:2.0.0.0'
+
+    /** Dagger 2 */
+    // TODO: get the dagger-compiler annotation processor to work and use Dagger instead of ProviderModule
+//    compile 'com.google.dagger:dagger:2.10'
+//    annotationProcessor 'com.google.dagger:dagger-compiler:2.10'
+//    provided 'javax.annotation:jsr250-api:1.0'
+}
+
+/**
+ * Workaround for using ProGuard with the experimental Gradle plugin.
+ *
+ * Trouble seems to be that unless process(Debug|Release)Resources task is needed, it is not created
+ * and VariantOutputScope.setProcessResourcesTask in TaskManager.createProcessResTask() is not
+ * called so when TaskManager.applyProguardConfig() calls
+ * BaseVariantOutputData.processResouresTask.getProguardOutputFile() it does so on a null object.
+ * So, by making transformClassesAndResourcesWithProguardFor(Debug|Release) depend on
+ * process(Debug|Release)Resources I force the task to be created
+ *
+ * More discussions here: https://issuetracker.google.com/issues/37079003
+ */
+tasks.all { task ->
+    def match = task.name =~ /^transformClassesAndResourcesWithProguardFor(.*)$/
+    if (match) {
+        task.dependsOn "process${match.group(1)}Resources"
+        return
+    }
+}

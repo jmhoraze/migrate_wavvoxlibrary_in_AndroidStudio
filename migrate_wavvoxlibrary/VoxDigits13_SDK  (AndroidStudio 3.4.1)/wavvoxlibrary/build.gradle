@@ -1,0 +1,238 @@
+import java.text.SimpleDateFormat
+
+// migrate from Android Studio with gradle:2.3.3 + gradle-experimental:0.9.3
+//           to Android Studio with gradle:3.4.1 + Cmake + ndkBuild
+// jm*20190614
+
+apply plugin: 'com.android.library'
+//apply plugin: 'com.android.model.library'
+
+/**
+ * >>>>> Set the version code here <<<<<
+ *
+ * Each subversion code should be exactly 2 numeric digits or we will get wrong versions published
+ * in the Google Play Store; buildType to switch between "cmake" and "ndkBuild"
+ */
+ext.majorVersion = "03"
+ext.minorVersion = "08"
+ext.patchVersion = "03"
+
+static String buildKind() {    // neat trick I created  :-)   // jm*20190614
+    //return "gradle"  // model - experimental
+    return "cmake"
+    //return "ndkBuild"
+}
+
+/**
+ * The name of the app version, using the Semantic Versioning format (major.minor.patch)
+ * @return
+ */
+String appVersionName() {
+    String appVersion = removeLeadingZeros(ext.majorVersion) + "." \
+                      + removeLeadingZeros(ext.minorVersion) + "." \
+                      + ext.patchVersion
+
+    System.out.println("  ************************************************")
+    System.out.println("  *** WavvoxLibrary  version:  " + appVersion + " ")
+    System.out.println("  ***                buildKind " + buildKind() )
+    System.out.println("  ************************************************")
+    return appVersion
+}
+
+/**
+ * The name of the app version, using a combination of stripped and non-stripped leading zeros in
+ * the major and minor version numbers, and omitting the patch version number. We surround the text
+ * with double quotes for use as a build config field so we don't get a field type mismatch
+ * @return
+ */
+String versionNameWavvoxFormat() {
+    return  "\""+removeLeadingZeros(ext.majorVersion)+"."+removeLeadingZeros(ext.minorVersion)+"\""
+}
+
+static String removeLeadingZeros(value) {   // jm*20190405
+    return new Integer(value).toString()
+}
+
+/**
+ * The version code of the app.  This is used by the Google Play Store to decide which versions to
+ * offer to users, so we should exercise care if we change this method.  This blog has some scheme
+ * suggestions for apps with NDK libs: {#link https://androidbycode.wordpress.com/category/gradle/}
+ * @return
+ */
+//String appVersionCode() {
+//    return ext.majorVersion + ext.minorVersion + ext.patchVersion;
+//}
+
+//model {
+    android {
+        compileSdkVersion 28
+        buildToolsVersion "28.0.3"  // "25.0.3"
+
+        defaultConfig {
+            minSdkVersion 16       /*** was: 8 ***/
+            targetSdkVersion 28
+            //
+            versionName appVersionName() + "_" + buildKind()
+            setProperty("archivesBaseName", "wavvoxlibrary-$versionName")
+            buildConfigField "String", "VERSION_NAME_WAVVOX_FORMAT", versionNameWavvoxFormat()
+            //buildConfigFields {
+            //    create() {
+            //        type "String"
+            //        name "VERSION_NAME_WAVVOX_FORMAT"
+            //        value versionNameWavvoxFormat()
+            //    }
+            //}
+
+            testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+
+        //}   // defaultConfig
+
+        ndk {
+            moduleName "wavvox-decoder"
+            ldLibs "log", "android"
+            // these platforms cover 99% percent of all Android devices
+            abiFilters "arm64-v8a", "armeabi-v7a"
+                   //, "x86", "x86_64"
+        }   // ndk
+
+        externalNativeBuild {
+            switch (buildKind()) {
+                case "ndkBuild":
+                    ndkBuild {
+                        cFlags "-std=c99", "-O3", "-Ofast", "-mfpu=neon"            // jm*20190616
+                            // "-Wno-error=format-security", "-mfloat-abi=softfp:, "-g"
+                        abiFilters "armeabi-v7a", "arm64-v8a"
+                    }
+                    break
+                case "cmake":
+                    cmake {
+                        cFlags "-std=c99", "-O3", "-Ofast", "-mfpu=neon"            // jm*20190616
+                            // "-Wno-error=format-security", "-mfloat-abi=softfp:, "-g"
+                        abiFilters 'armeabi-v7a', 'arm64-v8a'
+                    }
+                    break
+                default:
+                    println "**** unknown buildType value: " + buildType() + " ****"
+            }
+        }   // externalNativeBuild
+
+        }   // defaultConfig
+
+        buildTypes {
+            release {
+                minifyEnabled true
+                proguardFiles "proguard-rules.pro"
+            }
+        }   // buildTypes
+        // }   // android   // jm*20190405
+
+        // android.ndk {   // jm*20190405
+
+        // C source files to include in the build script
+        // android.sources.main.jni {   // jm*20190405
+
+  /*    if (buildKind() == "gradle")    // using "model"  in gradle_experimental
+        sourceSets {
+            main {
+                jniLibs.srcDirs = ['src/main/jni']    // for pre-built .so files
+
+                jni {
+                    //source {
+                        include "wavvoxNativeApp.c"
+                        include "licenseWavvox.c"        // jm*20180520
+                        include "driverGeneration.c"     // jm*20170317
+                        include "driver.c"
+                        include "process.c"
+                        include "buildPacket.c"          // jm*20180315
+                        include "buildPacketEmbed.c"
+                        include "Decode.c"
+                        include "fifo.c"
+                        include "filters.c"
+                        include "campaignCodeText.c"
+                        include "convertTextCode.c"
+                        include "transmitSymbol.c"
+                        include "transmit.c"
+                        srcDir "jni"
+                    //}
+                }   // jni
+            }   // main
+        }   // source
+*/
+        externalNativeBuild {
+            switch (buildKind()) {
+                case "ndkBuild":
+                    ndkBuild {
+                        path 'src/main/jni/Android.mk'
+                    }
+                    break
+                case "cmake":
+                    cmake {
+                        version '3.10.2'
+                        path 'src/main/jni/CMakeLists.txt'
+                    }
+                    break
+                default:
+                    println "**** unknown buildType value: " + buildType() + " ****"
+            }
+        }   // externalNativeBuild
+
+    }   // android   // jm*20190405
+//}   // model
+
+dependencies {
+//    implementation fileTree(dir: 'libs', include: ['*.jar'])
+//    androidTestImplementation('com.android.support.test.espresso:espresso-core:2.2.2', {
+//        exclude group: 'com.android.support', module: 'support-annotations'
+//    })
+//    implementation 'com.android.support:appcompat-v7:28.0.0'
+//    testImplementation 'junit:junit:4.12'
+//}
+
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.android.support:appcompat-v7:28.0.0'
+    implementation 'com.android.support.constraint:constraint-layout:1.1.3'
+
+    implementation 'com.android.support:support-annotations:28.0.0'
+
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.hamcrest:hamcrest-junit:2.0.0.0'
+
+    /** Dagger 2 **/
+    // TODO: get the dagger-compiler annotation processor to work and use Dagger instead of ProviderModule
+//    implementation 'com.google.dagger:dagger:2.22.1'
+//    annotationProcessor 'com.google.dagger:dagger-compiler:2.22.1'
+//    compileOnly 'javax.annotation:jsr250-api:1.0'
+}
+
+/**
+ * Workaround for using ProGuard with the experimental Gradle plugin.
+ *
+ * Trouble seems to be that unless process(Debug|Release)Resources task is needed, it is not created
+ * and VariantOutputScope.setProcessResourcesTask in TaskManager.createProcessResTask() is not
+ * called so when TaskManager.applyProguardConfig() calls
+ * BaseVariantOutputData.processResouresTask.getProguardOutputFile() it does so on a null object.
+ * So, by making transformClassesAndResourcesWithProguardFor(Debug|Release) depend on
+ * process(Debug|Release)Resources I force the task to be created
+ *
+ * More discussions here: https://issuetracker.google.com/issues/37079003
+ */
+
+tasks.all { task ->
+    def match = task.name =~ /^transformClassesAndResourcesWithProguardFor(.*)$/
+    if (match) {
+        task.dependsOn "process${match.group(1)}Resources"
+        return
+    }
+}
+
+// ToDo:  get automatic build of .aar libraries working;
+//        currently, double-click on Gradle "wavvoxlibrary / Tasks / build / assemble"
+task assembleAAR {
+    doLast {
+        println "***** Task:  wavvoxlibraty / Tasks / build / assemble  to create .aar *****"
+        println "***** find ./wavvoxlibrary/build/outputs/aar/wavvoxlibrary ..... .aar *****"
+        // assemble()
+        build.assemble()
+    }
+}
+

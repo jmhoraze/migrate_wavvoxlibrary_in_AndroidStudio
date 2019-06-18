@@ -1,0 +1,22 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+buildscript {
+    repositories {
+        google()
+        jcenter()
+    }
+    dependencies {
+        // to build applicationId "net.wavvox.voxdigits"
+        classpath 'com.android.tools.build:gradle:3.4.1'
+        // to build moduleName "wavvox-decoder" (wavvoxlibrary) using "model" plugin
+        //classpath 'com.android.tools.build:gradle-experimental:0.11.1'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        jcenter()
+        maven { url "https://jitpack.io" }
+        //mavenCentral()
+    }
+}
