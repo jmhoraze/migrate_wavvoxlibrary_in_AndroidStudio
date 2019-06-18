@@ -3,6 +3,7 @@ Android Studio: migrating libraries with C/C++ from gradle-experimental with Mod
 
 <h2>
 This was then …
+</h2>  
 
 For our technology we have a portfolio of c programs working in Windows (VisualStudio), iOS (Xcode), Android (Android Studio).
 Available as SDK in form of a library for Xcode and Android development.  (Also using the respective audio interface, especially, recording from the devices’ microphone(s).)
@@ -23,10 +24,11 @@ Even though the Gradle blog “State and future of the Gradle Software Model” 
 
 <h2>
 This is now …
+</h2>
 
 ....
 
-see:
+
 <h5>
   "Android Studio_ migrating libraries with C_C++ from gradle-experimental with Model plugin 
         to gradle + CMake _ ndkBuild.pdf"
